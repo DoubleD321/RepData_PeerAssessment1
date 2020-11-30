@@ -36,133 +36,120 @@ The variables included in this dataset are:
 * **interval**: Identifier for the 5-minute interval in which
     measurement was taken
 
-
-
-
 The dataset is stored in a comma-separated-value (CSV) file and there
 are a total of 17,568 observations in this
 dataset.
 
+## Set working directory and load library
+setwd(choose.dir())
+library(ggplot2)
 
-## Assignment
+Note that the data file already downloaded in GitHub and extracted from zip
 
-This assignment will be described in multiple parts. You will need to
-write a report that answers the questions detailed below. Ultimately,
-you will need to complete the entire assignment in a **single R
-markdown** document that can be processed by **knitr** and be
-transformed into an HTML file.
+## load data into R
+activity_data<- read.csv("activity.csv")
+str(activity_data)
+summary(activity_data)
 
-Throughout your report make sure you always include the code that you
-used to generate the output you present. When writing code chunks in
-the R markdown document, always use `echo = TRUE` so that someone else
-will be able to read the code. **This assignment will be evaluated via
-peer assessment so it is essential that your peer evaluators be able
-to review the code for your analysis**.
+## aggregate steps data by date
+activity_stepsPD<- with(activity_data,aggregate(steps, by=list(date),sum,na.rm=TRUE,header=TRUE))
+names(activity_stepsPD)<- c("date","steps")
 
-For the plotting aspects of this assignment, feel free to use any
-plotting system in R (i.e., base, lattice, ggplot2)
+## determine the mean and median steps per day
+mean(activity_stepsPD$steps)
+median(activity_stepsPD$steps)
 
-Fork/clone the [GitHub repository created for this
-assignment](http://github.com/rdpeng/RepData_PeerAssessment1). You
-will submit this assignment by pushing your completed files into your
-forked repository on GitHub. The assignment submission will consist of
-the URL to your GitHub repository and the SHA-1 commit ID for your
-repository state.
-
-NOTE: The GitHub repository also contains the dataset for the
-assignment so you do not have to download the data separately.
+## aggregate steps date by interval and determine mean
+activity_stepsPT<- with(activity_data,aggregate(steps, by=list(interval),mean,na.rm=TRUE))
+names(activity_stepsPT)<- c("interval","MeanSteps")
 
 
+## plot steps by interval
+library(ggplot2) 
+ggplot(activity_stepsPT, aes(interval,MeanSteps))+
+geom_line(col="blue")+
+        ggtitle("Average steps per interval")+
+        xlab("Time interval")+ylab("Steps")+
+        ggtitle("Steps per Time Interval")
 
-### Loading and preprocessing the data
+## determine max number of steps in an interval (id interval)
+max_stepsI<- activity_stepsPT[which.max(activity_stepsPT$MeanSteps),]
+max_stepsI
 
-Show any code that is needed to
+## Identify missing data
+missingVals<- !complete.cases(activity_data)
+sum(missingVals==TRUE)
 
-1. Load the data (i.e. `read.csv()`)
+## Replace missing data with interval mean data
+library(dplyr)
+imp_data <- activity_data %>%
+  mutate(
+    steps = case_when(
+      is.na(steps) ~ activity_stepsPT$MeanSteps[match(activity_data$interval, activity_stepsPT$interval)],      
+      TRUE ~ as.numeric(steps)
+    ))
 
-2. Process/transform the data (if necessary) into a format suitable for your analysis
+## Aggregate the step by interval for the "complete" dataset (imputed)
+imp_data_stepsPT<- with(imp_data,aggregate(steps, by=list(interval),mean,na.rm=TRUE))
+names(imp_data_stepsPT)<- c("interval","MeanSteps")
+
+## Aggregate the step per day by date
+imp_data_stepsPD<- with(imp_data,aggregate(steps, by=list(date),sum,header=TRUE))
+str(imp_data_stepsPD)
+summary(imp_data_stepsPD)
+names(imp_data_stepsPD)<- c("date","steps")
+
+## Calculate mean and median of the complete dataset interval
+imp_mean<- mean(imp_data_stepsPT$MeanSteps)
+imp_mean
+imp_median<- median(imp_data_stepsPT$MeanSteps)
+imp_median
+
+## Calculate mean and median of the complete dataset steps per day
+mean(imp_data_stepsPD$steps)
+names(imp_data_stepsPD)<- c("date","steps")
+median(imp_data_stepsPD$steps)
+
+## Histogram of complete dataset - steps per day
+hist(imp_data_stepsPD$steps,
+     main="Total Steps Taken per day",
+     xlab="Steps",col="green")
+
+## Comparing mean and median of original dataset with the "complete' dataset
+imp_mean<-mean(imp_data_stepsPD$steps)
+imp_median<-median(imp_data_stepsPD$steps)
+
+## Original mean and median
+omean<-mean(activity_stepsPD$steps)
+omedian<- median(activity_stepsPD$steps)
+
+## Determine the difference between original and imputed
+dif_mean<- imp_mean - omean
+dif_mean
+dif_median<- imp_median - omedian
+dif_median
+
+## Calculate a percentage change
+mean_percent_chg<-(imp_mean - omean)/omean
+mean_percent_chg
+median_percent_chg<-(imp_median-omedian)/omedian
+median_percent_chg
 
 
-### What is mean total number of steps taken per day?
+## Add a duplicate copy of date column and call it WD_WE
+imp_data_WD_WE<- imp_data %>%
+  mutate(WD_WE = date)
 
-For this part of the assignment, you can ignore the missing values in
-the dataset.
+## Change data in WD_WE to indicate if the date falls on a weekday or weekend
+imp_data_WD_WE$WD_WE <- ifelse(weekdays(as.Date(imp_data_WD_WE$WD_WE)) == "Saturday" | weekdays(as.Date(imp_data_WD_WE$WD_WE)) == "Sunday", "weekend", "weekday")
 
-1. Make a histogram of the total number of steps taken each day
+## Aggregate steps by WD_WE and interval
+week_end_day <- aggregate(steps ~ WD_WE+interval, data=imp_data_WD_WE, sum)
 
-2. Calculate and report the **mean** and **median** total number of steps taken per day
+## Plot comparing the weekday and weekend steps
+ggplot(week_end_day, aes(interval, steps)) + 
+  geom_line() + 
+  facet_wrap(~WD_WE, nrow = 2) +
+  xlab("Intervals (5 minute)") + 
+  ylab("Number of steps")
 
-
-### What is the average daily activity pattern?
-
-1. Make a time series plot (i.e. `type = "l"`) of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
-
-2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
-
-
-### Imputing missing values
-
-Note that there are a number of days/intervals where there are missing
-values (coded as `NA`). The presence of missing days may introduce
-bias into some calculations or summaries of the data.
-
-1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with `NA`s)
-
-2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
-
-3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
-
-4. Make a histogram of the total number of steps taken each day and Calculate and report the **mean** and **median** total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
-
-
-### Are there differences in activity patterns between weekdays and weekends?
-
-For this part the `weekdays()` function may be of some help here. Use
-the dataset with the filled-in missing values for this part.
-
-1. Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
-
-1. Make a panel plot containing a time series plot (i.e. `type = "l"`) of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). The plot should look something like the following, which was created using **simulated data**:
-
-![Sample panel plot](instructions_fig/sample_panelplot.png) 
-
-
-**Your plot will look different from the one above** because you will
-be using the activity monitor data. Note that the above plot was made
-using the lattice system but you can make the same version of the plot
-using any plotting system you choose.
-
-
-## Submitting the Assignment
-
-To submit the assignment:
-
-1. Commit your completed `PA1_template.Rmd` file to the `master` branch of your git repository (you should already be on the `master` branch unless you created new ones)
-
-2. Commit your `PA1_template.md` and `PA1_template.html` files produced by processing your R markdown file with the `knit2html()` function in R (from the **knitr** package)
-
-3. If your document has figures included (it should) then they should have been placed in the `figure/` directory by default (unless you overrode the default). Add and commit the `figure/` directory to your git repository.
-
-4. Push your `master` branch to GitHub.
-
-5. Submit the URL to your GitHub repository for this assignment on the course web site.
-
-In addition to submitting the URL for your GitHub repository, you will
-need to submit the 40 character SHA-1 hash (as string of numbers from
-0-9 and letters from a-f) that identifies the repository commit that
-contains the version of the files you want to submit. You can do this
-in GitHub by doing the following:
-
-1. Go into your GitHub repository web page for this assignment
-
-2. Click on the "?? commits" link where ?? is the number of commits you have in the repository. For example, if you made a total of 10 commits to this repository, the link should say "10 commits".
-
-3. You will see a list of commits that you have made to this repository. The most recent commit is at the very top. If this represents the version of the files you want to submit, then just click the "copy to clipboard" button on the right hand side that should appear when you hover over the SHA-1 hash. Paste this SHA-1 hash into the course web site when you submit your assignment. If you don't want to use the most recent commit, then go down and find the commit you want and copy the SHA-1 hash.
-
-A valid submission will look something like (this is just an **example**!)
-
-```r
-https://github.com/rdpeng/RepData_PeerAssessment1
-
-7c376cc5447f11537f8740af8e07d6facc3d9645
-```
